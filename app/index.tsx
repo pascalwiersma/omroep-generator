@@ -1,15 +1,15 @@
-import { useState, useMemo, useEffect } from "react";
+import { StatusBar } from "expo-status-bar";
+import { useEffect, useMemo, useState } from "react";
 import {
-  Text,
-  View,
-  TextInput,
-  TouchableOpacity,
+  ActivityIndicator,
+  Alert,
   ScrollView,
   StyleSheet,
-  Alert,
-  ActivityIndicator,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { StatusBar } from "expo-status-bar";
 import stationsData from "../stations.json";
 
 const API_BASE_URL = "http://localhost:3000";
@@ -21,6 +21,28 @@ const TRAIN_TYPES = [
   "Thalys",
   "Eurostar",
   "IC Direct",
+  "ICE",
+  "Nightjet",
+  "IC Berlijn",
+];
+
+const SPECIAL_NOTICES = [
+  "Rijdt niet",
+  "Vertraging",
+  "Gedeeltelijk opgeheven",
+  "Rijdt via andere route",
+  "Extra trein",
+  "Minder wagons",
+  "Stopt niet op alle stations",
+  "Vervangend vervoer",
+  "Aanrijding persoon",
+  "Aanrijding dier",
+  "Aanrijding voertuig",
+  "Wisselstoring",
+  "Defecte trein",
+  "Weersomstandigheden",
+  "Seinsstoring",
+  "Defecte bovenleiding",
 ];
 
 const STATIONS = stationsData.stations.map((s) => s.name);
@@ -97,6 +119,7 @@ export default function Index() {
   const [allRouteStops, setAllRouteStops] = useState<string[]>([]);
   const [hours, setHours] = useState<string>("");
   const [minutes, setMinutes] = useState<string>("");
+  const [selectedNotices, setSelectedNotices] = useState<string[]>([]);
   const [loadingRoute, setLoadingRoute] = useState<boolean>(false);
 
   const handleFromSelect = (station: string) => {
@@ -114,7 +137,10 @@ export default function Index() {
     try {
       // Gebruik ingevulde tijd of default naar 10:00
       let dateTime: string;
-      const timeStr = hours && minutes ? `${hours.padStart(2, "0")}:${minutes.padStart(2, "0")}` : null;
+      const timeStr =
+        hours && minutes
+          ? `${hours.padStart(2, "0")}:${minutes.padStart(2, "0")}`
+          : null;
       if (timeStr) {
         // Default: morgen om ingevulde tijd
         const tomorrow = new Date();
@@ -132,7 +158,7 @@ export default function Index() {
         const day = String(tomorrow.getDate()).padStart(2, "0");
         dateTime = `${year}-${month}-${day}T10:00`;
       }
-      
+
       const response = await fetch(`${API_BASE_URL}/api/route`, {
         method: "POST",
         headers: {
@@ -150,7 +176,7 @@ export default function Index() {
       }
 
       const data = await response.json();
-      
+
       if (data.stops && Array.isArray(data.stops)) {
         // Sla alle stops op voor de route visualisatie
         setAllRouteStops(data.stops);
@@ -191,6 +217,14 @@ export default function Index() {
     );
   }, [allRouteStops, fromStation, toStation]);
 
+  const toggleNotice = (notice: string) => {
+    if (selectedNotices.includes(notice)) {
+      setSelectedNotices(selectedNotices.filter((n) => n !== notice));
+    } else {
+      setSelectedNotices([...selectedNotices, notice]);
+    }
+  };
+
   const generateAnnouncement = () => {
     if (!trainType || !fromStation || !toStation || !hours || !minutes) {
       Alert.alert(
@@ -202,12 +236,16 @@ export default function Index() {
 
     const timeStr = `${hours.padStart(2, "0")}:${minutes.padStart(2, "0")}`;
     let announcement = `${trainType} van ${fromStation} naar ${toStation}`;
-    
+
     if (intermediateStops.length > 0) {
       announcement += ` via ${intermediateStops.join(", ")}`;
     }
-    
+
     announcement += `, vertrekt om ${timeStr}`;
+
+    if (selectedNotices.length > 0) {
+      announcement += `. ${selectedNotices.join(". ")}.`;
+    }
 
     Alert.alert("Omroep", announcement);
   };
@@ -232,10 +270,7 @@ export default function Index() {
             {TRAIN_TYPES.map((type) => (
               <TouchableOpacity
                 key={type}
-                style={[
-                  styles.chip,
-                  trainType === type && styles.chipSelected,
-                ]}
+                style={[styles.chip, trainType === type && styles.chipSelected]}
                 onPress={() => setTrainType(type)}
               >
                 <Text
@@ -251,6 +286,52 @@ export default function Index() {
           </ScrollView>
         </View>
 
+        {/* Time Input */}
+        <View style={styles.section}>
+          <Text style={styles.label}>Vertrektijd *</Text>
+          <View style={styles.timeInputContainer}>
+            <View style={styles.timeInputWrapper}>
+              <TextInput
+                style={[styles.input, styles.timeInput]}
+                placeholder="Uren"
+                value={hours}
+                onChangeText={(text) => {
+                  // Alleen cijfers, max 2 cijfers, max 23
+                  const num = text.replace(/[^0-9]/g, "");
+                  if (
+                    num === "" ||
+                    (parseInt(num) >= 0 && parseInt(num) <= 23)
+                  ) {
+                    setHours(num.slice(0, 2));
+                  }
+                }}
+                keyboardType="numeric"
+                placeholderTextColor="#999"
+                maxLength={2}
+              />
+              <Text style={styles.timeSeparator}>:</Text>
+              <TextInput
+                style={[styles.input, styles.timeInput]}
+                placeholder="Minuten"
+                value={minutes}
+                onChangeText={(text) => {
+                  // Alleen cijfers, max 2 cijfers, max 59
+                  const num = text.replace(/[^0-9]/g, "");
+                  if (
+                    num === "" ||
+                    (parseInt(num) >= 0 && parseInt(num) <= 59)
+                  ) {
+                    setMinutes(num.slice(0, 2));
+                  }
+                }}
+                keyboardType="numeric"
+                placeholderTextColor="#999"
+                maxLength={2}
+              />
+            </View>
+          </View>
+        </View>
+
         {/* From Station Input */}
         <View style={styles.section}>
           <Text style={styles.label}>Van *</Text>
@@ -262,9 +343,7 @@ export default function Index() {
           />
           {fromStation && (
             <View style={styles.selectedStationContainer}>
-              <Text style={styles.selectedStationText}>
-                Van: {fromStation}
-              </Text>
+              <Text style={styles.selectedStationText}>Van: {fromStation}</Text>
               <TouchableOpacity
                 onPress={() => {
                   setFromStation("");
@@ -289,10 +368,10 @@ export default function Index() {
                 <View style={styles.routeStationCircle} />
                 <Text style={styles.routeStationText}>{fromStation}</Text>
               </View>
-              
+
               {/* Verticale lijn */}
               <View style={styles.routeLine} />
-              
+
               {/* Tussenstations */}
               {intermediateStops.map((station, index) => (
                 <View key={`${station}-${index}`}>
@@ -311,10 +390,12 @@ export default function Index() {
                   )}
                 </View>
               ))}
-              
+
               {/* Verticale lijn naar laatste station */}
-              {intermediateStops.length > 0 && <View style={styles.routeLine} />}
-              
+              {intermediateStops.length > 0 && (
+                <View style={styles.routeLine} />
+              )}
+
               {/* Naar station */}
               <View style={styles.routeStation}>
                 <View style={styles.routeStationCircle} />
@@ -336,9 +417,7 @@ export default function Index() {
           />
           {toStation && (
             <View style={styles.selectedStationContainer}>
-              <Text style={styles.selectedStationText}>
-                Naar: {toStation}
-              </Text>
+              <Text style={styles.selectedStationText}>Naar: {toStation}</Text>
               {loadingRoute && (
                 <ActivityIndicator
                   size="small"
@@ -360,43 +439,30 @@ export default function Index() {
           )}
         </View>
 
-        {/* Time Input */}
+        {/* Special Notices */}
         <View style={styles.section}>
-          <Text style={styles.label}>Vertrektijd *</Text>
-          <View style={styles.timeInputContainer}>
-            <View style={styles.timeInputWrapper}>
-              <TextInput
-                style={[styles.input, styles.timeInput]}
-                placeholder="Uren"
-                value={hours}
-                onChangeText={(text) => {
-                  // Alleen cijfers, max 2 cijfers, max 23
-                  const num = text.replace(/[^0-9]/g, "");
-                  if (num === "" || (parseInt(num) >= 0 && parseInt(num) <= 23)) {
-                    setHours(num.slice(0, 2));
-                  }
-                }}
-                keyboardType="numeric"
-                placeholderTextColor="#999"
-                maxLength={2}
-              />
-              <Text style={styles.timeSeparator}>:</Text>
-              <TextInput
-                style={[styles.input, styles.timeInput]}
-                placeholder="Minuten"
-                value={minutes}
-                onChangeText={(text) => {
-                  // Alleen cijfers, max 2 cijfers, max 59
-                  const num = text.replace(/[^0-9]/g, "");
-                  if (num === "" || (parseInt(num) >= 0 && parseInt(num) <= 59)) {
-                    setMinutes(num.slice(0, 2));
-                  }
-                }}
-                keyboardType="numeric"
-                placeholderTextColor="#999"
-                maxLength={2}
-              />
-            </View>
+          <Text style={styles.label}>Bijzonderheden</Text>
+          <View style={styles.noticesContainer}>
+            {SPECIAL_NOTICES.map((notice) => (
+              <TouchableOpacity
+                key={notice}
+                style={[
+                  styles.noticeChip,
+                  selectedNotices.includes(notice) && styles.noticeChipSelected,
+                ]}
+                onPress={() => toggleNotice(notice)}
+              >
+                <Text
+                  style={[
+                    styles.noticeChipText,
+                    selectedNotices.includes(notice) &&
+                      styles.noticeChipTextSelected,
+                  ]}
+                >
+                  {notice}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
 
@@ -405,9 +471,7 @@ export default function Index() {
           style={styles.generateButton}
           onPress={generateAnnouncement}
         >
-          <Text style={styles.generateButtonText}>
-            Genereer Omroep
-          </Text>
+          <Text style={styles.generateButtonText}>Genereer Omroep</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
@@ -492,6 +556,33 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#333",
     marginHorizontal: 8,
+  },
+  noticesContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: 8,
+  },
+  noticeChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: "#fff",
+    marginRight: 8,
+    marginBottom: 8,
+    borderWidth: 2,
+    borderColor: "#e0e0e0",
+  },
+  noticeChipSelected: {
+    backgroundColor: "#ff6b6b",
+    borderColor: "#ff6b6b",
+  },
+  noticeChipText: {
+    fontSize: 14,
+    color: "#333",
+    fontWeight: "500",
+  },
+  noticeChipTextSelected: {
+    color: "#fff",
   },
   generateButton: {
     backgroundColor: "#0066cc",
