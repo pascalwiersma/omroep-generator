@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Modal,
+  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -110,6 +112,93 @@ function StationAutocomplete({
   );
 }
 
+interface NoticeSelectProps {
+  value: string;
+  onSelect: (notice: string) => void;
+  options: string[];
+}
+
+function NoticeSelect({ value, onSelect, options }: NoticeSelectProps) {
+  const [showModal, setShowModal] = useState(false);
+
+  return (
+    <View>
+      <View style={styles.selectContainer}>
+        <TouchableOpacity
+          style={[styles.selectButton, value && { paddingRight: 50 }]}
+          onPress={() => setShowModal(true)}
+        >
+          <Text
+            style={[
+              styles.selectButtonText,
+              !value && styles.selectPlaceholder,
+            ]}
+          >
+            {value || "Selecteer bijzonderheid"}
+          </Text>
+          <Text style={styles.selectArrow}>▼</Text>
+        </TouchableOpacity>
+        {value && (
+          <TouchableOpacity
+            onPress={() => onSelect("")}
+            style={styles.clearSelectButton}
+          >
+            <Text style={styles.clearButtonText}>×</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+      <Modal
+        visible={showModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowModal(false)}
+        >
+          <View style={styles.modalContent}>
+            <ScrollView>
+              <TouchableOpacity
+                style={styles.selectOption}
+                onPress={() => {
+                  onSelect("");
+                  setShowModal(false);
+                }}
+              >
+                <Text style={styles.selectOptionText}>Geen</Text>
+              </TouchableOpacity>
+              {options.map((option) => (
+                <TouchableOpacity
+                  key={option}
+                  style={[
+                    styles.selectOption,
+                    value === option && styles.selectOptionSelected,
+                  ]}
+                  onPress={() => {
+                    onSelect(option);
+                    setShowModal(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.selectOptionText,
+                      value === option && styles.selectOptionTextSelected,
+                    ]}
+                  >
+                    {option}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+    </View>
+  );
+}
+
 export default function Index() {
   const [trainType, setTrainType] = useState<string>("");
   const [fromStation, setFromStation] = useState<string>("");
@@ -119,7 +208,7 @@ export default function Index() {
   const [allRouteStops, setAllRouteStops] = useState<string[]>([]);
   const [hours, setHours] = useState<string>("");
   const [minutes, setMinutes] = useState<string>("");
-  const [selectedNotices, setSelectedNotices] = useState<string[]>([]);
+  const [selectedNotice, setSelectedNotice] = useState<string>("");
   const [loadingRoute, setLoadingRoute] = useState<boolean>(false);
 
   const handleFromSelect = (station: string) => {
@@ -217,14 +306,6 @@ export default function Index() {
     );
   }, [allRouteStops, fromStation, toStation]);
 
-  const toggleNotice = (notice: string) => {
-    if (selectedNotices.includes(notice)) {
-      setSelectedNotices(selectedNotices.filter((n) => n !== notice));
-    } else {
-      setSelectedNotices([...selectedNotices, notice]);
-    }
-  };
-
   const generateAnnouncement = () => {
     if (!trainType || !fromStation || !toStation || !hours || !minutes) {
       Alert.alert(
@@ -243,21 +324,24 @@ export default function Index() {
 
     announcement += `, vertrekt om ${timeStr}`;
 
-    if (selectedNotices.length > 0) {
-      announcement += `. ${selectedNotices.join(". ")}.`;
+    if (selectedNotice) {
+      announcement += `. ${selectedNotice}.`;
     }
 
     Alert.alert("Omroep", announcement);
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <StatusBar style="auto" />
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
       >
-        <Text style={styles.title}>Treinomroep Generator</Text>
+        <View style={styles.headerContainer}>
+          <Text style={styles.headerTitle}>Omroep generator</Text>
+          <Text style={styles.headerSubtitle}>door Pascal Services</Text>
+        </View>
 
         {/* Train Type Selection */}
         <View style={styles.section}>
@@ -442,28 +526,11 @@ export default function Index() {
         {/* Special Notices */}
         <View style={styles.section}>
           <Text style={styles.label}>Bijzonderheden</Text>
-          <View style={styles.noticesContainer}>
-            {SPECIAL_NOTICES.map((notice) => (
-              <TouchableOpacity
-                key={notice}
-                style={[
-                  styles.noticeChip,
-                  selectedNotices.includes(notice) && styles.noticeChipSelected,
-                ]}
-                onPress={() => toggleNotice(notice)}
-              >
-                <Text
-                  style={[
-                    styles.noticeChipText,
-                    selectedNotices.includes(notice) &&
-                      styles.noticeChipTextSelected,
-                  ]}
-                >
-                  {notice}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <NoticeSelect
+            value={selectedNotice}
+            onSelect={setSelectedNotice}
+            options={SPECIAL_NOTICES}
+          />
         </View>
 
         {/* Generate Button */}
@@ -474,7 +541,7 @@ export default function Index() {
           <Text style={styles.generateButtonText}>Genereer Omroep</Text>
         </TouchableOpacity>
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -488,7 +555,23 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
-    paddingTop: 60,
+    paddingTop: 20,
+  },
+  headerContainer: {
+    marginBottom: 30,
+    alignItems: "center",
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: "bold",
+    color: "#1a1a1a",
+    marginBottom: 4,
+    textAlign: "center",
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
   },
   title: {
     fontSize: 28,
@@ -557,32 +640,72 @@ const styles = StyleSheet.create({
     color: "#333",
     marginHorizontal: 8,
   },
-  noticesContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginTop: 8,
+  selectContainer: {
+    position: "relative",
   },
-  noticeChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
+  selectButton: {
     backgroundColor: "#fff",
-    marginRight: 8,
-    marginBottom: 8,
-    borderWidth: 2,
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    borderWidth: 1,
     borderColor: "#e0e0e0",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
-  noticeChipSelected: {
-    backgroundColor: "#ff6b6b",
-    borderColor: "#ff6b6b",
-  },
-  noticeChipText: {
-    fontSize: 14,
+  selectButtonText: {
+    fontSize: 16,
     color: "#333",
-    fontWeight: "500",
+    flex: 1,
   },
-  noticeChipTextSelected: {
-    color: "#fff",
+  selectPlaceholder: {
+    color: "#999",
+  },
+  selectArrow: {
+    fontSize: 12,
+    color: "#666",
+    marginLeft: 8,
+  },
+  clearSelectButton: {
+    position: "absolute",
+    right: 12,
+    top: 12,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#0066cc",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    width: "80%",
+    maxHeight: "70%",
+    padding: 16,
+  },
+  selectOption: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+  },
+  selectOptionSelected: {
+    backgroundColor: "#e3f2fd",
+  },
+  selectOptionText: {
+    fontSize: 16,
+    color: "#333",
+  },
+  selectOptionTextSelected: {
+    color: "#0066cc",
+    fontWeight: "600",
   },
   generateButton: {
     backgroundColor: "#0066cc",
